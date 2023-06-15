@@ -1,42 +1,59 @@
-import User from '../models/User'
-
-module.exports = resolvers;
+const { AuthenticationError } = ( "apollo-server-express");
+const User = ( "../models/User");
 
 const resolvers = {
-    Query: {
-      me: async () => {
-        return User.find({})
+  Query: {
+    me: async () => {
+      return User.find({});
     },
-    },
-    Mutation: {
-        login: async (parent, { email, password }) => {
-            const profile = await Profile.findOne({ email });
-      
-            if (!profile) {
-              throw new AuthenticationError('No profile with this email found!');
-            }
-      
-            const correctPw = await profile.isCorrectPassword(password);
-      
-            if (!correctPw) {
-              throw new AuthenticationError('Incorrect password!');
-            }
-      
-            const token = signToken(profile);
-            return { token, profile };
-          },
+  },
+  Mutation: {
+    login: async (parent, { email, password }) => {
+      const user = await User.findOne({ email });
 
-      addUser: async (parent,{ username, email, password }, context) => {
+      if (!user) {
+        throw new AuthenticationError("No user with this email found!");
+      }
 
-      },
-      saveBook: async (parent, { bookData }, context) => {
-        
-      },
-      removeBook: async (parent, { bookId }, context) => {
-       
-      },
+      const correctPw = await user.isCorrectPassword(password);
+
+      if (!correctPw) {
+        throw new AuthenticationError("Incorrect password!");
+      }
+
+      const token = signToken(user);
+      return { token, user };
     },
-  };
-  
-  module.exports = resolvers;
-  
+
+    addUser: async (parent, { username, email, password }) => {
+      const newUser = User.create({ username, email, password });
+      const token = signToken(newUser);
+      return { token, newUser };
+    },
+    saveBook: async (parent, { bookData }, context) => {
+      try {
+        const updatedUser = await User.findOneAndUpdate(
+          { _id: context.user._id },
+          { $addToSet: { savedBooks: bookData } },
+          { new: true, runValidators: true }
+        );
+        return { updatedUser };
+      } catch (err) {
+        console.log(err);
+      }
+    },
+    removeBook: async (parent, { bookId }, context) => {
+      const updatedUser = await User.findOneAndUpdate(
+        { _id: context.user._id },
+        { $pull: { savedBooks: { bookId: bookId } } },
+        { new: true }
+      );
+      if (!updatedUser) {
+        throw new AuthenticationError ({ message: "Couldn't find user with this id!" });
+      }
+      return {updatedUser};
+    },
+  },
+};
+
+module.exports = resolvers;
